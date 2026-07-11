@@ -1,4 +1,14 @@
-import { queryItems, updateItem, deleteItem, restoreItem, getAllTags } from "../shared/db.js";
+import {
+  queryItems,
+  updateItem,
+  deleteItem,
+  restoreItem,
+  getAllTags,
+  addFolder,
+  getAllFolders,
+  renameFolder,
+  deleteFolder,
+} from "../shared/db.js";
 import { MESSAGE_TYPE, ITEM_TYPE } from "../shared/constants.js";
 
 const PAGE_SIZE = 40;
@@ -13,9 +23,11 @@ const FALLBACK_FAVICON =
 
 const state = {
   items: [],
-  filter: { type: "all", tag: "" },
+  filter: { type: "all", tag: "", folderId: undefined }, // folderId: undefined = all, null = unfiled, number = a folder
   search: "",
+  view: "list", // "list" | "gallery"
   focusedIndex: -1,
+  folders: [],
   objectUrls: new Map(), // itemId -> { thumb?, favicon? }
 };
 
@@ -23,7 +35,12 @@ const el = {
   searchInput: document.getElementById("search-input"),
   filterRow: document.getElementById("filter-row"),
   tagFilter: document.getElementById("tag-filter"),
+  folderFilter: document.getElementById("folder-filter"),
+  manageFoldersBtn: document.getElementById("manage-folders-btn"),
+  viewButtons: Array.from(document.querySelectorAll(".view-btn")),
   itemList: document.getElementById("item-list"),
+  galleryGrid: document.getElementById("gallery-grid"),
+  galleryEmptyHint: document.getElementById("gallery-empty-hint"),
   emptyState: document.getElementById("empty-state"),
   loadMoreBtn: document.getElementById("load-more"),
   toast: document.getElementById("toast"),
@@ -33,12 +50,30 @@ const el = {
   editDialog: document.getElementById("edit-dialog"),
   editForm: document.getElementById("edit-form"),
   editNote: document.getElementById("edit-note"),
+  editFolder: document.getElementById("edit-folder"),
   editTagsList: document.getElementById("edit-tags-list"),
   editTagsInput: document.getElementById("edit-tags-input"),
   editCancel: document.getElementById("edit-cancel"),
   imageModal: document.getElementById("image-modal"),
   imageModalImg: document.getElementById("image-modal-img"),
   imageModalClose: document.getElementById("image-modal-close"),
+  imageModalFavicon: document.getElementById("image-modal-favicon"),
+  imageModalDomain: document.getElementById("image-modal-domain"),
+  imageModalTimestamp: document.getElementById("image-modal-timestamp"),
+  imageModalTitle: document.getElementById("image-modal-title"),
+  imageModalUrl: document.getElementById("image-modal-url"),
+  imageModalNote: document.getElementById("image-modal-note"),
+  imageModalTags: document.getElementById("image-modal-tags"),
+  imageModalFavorite: document.getElementById("image-modal-favorite"),
+  imageModalEdit: document.getElementById("image-modal-edit"),
+  imageModalCopy: document.getElementById("image-modal-copy"),
+  imageModalOpen: document.getElementById("image-modal-open"),
+  imageModalDelete: document.getElementById("image-modal-delete"),
+  folderDialog: document.getElementById("folder-dialog"),
+  folderManageList: document.getElementById("folder-manage-list"),
+  folderCreateForm: document.getElementById("folder-create-form"),
+  folderNameInput: document.getElementById("folder-name-input"),
+  folderDialogClose: document.getElementById("folder-dialog-close"),
 };
 
 let editingItem = null;
@@ -52,6 +87,7 @@ init();
 async function init() {
   bindEvents();
   await refreshTagFilterOptions();
+  await refreshFolderFilterOptions();
   await loadItems({ reset: true });
 }
 
@@ -61,6 +97,8 @@ function currentQueryOptions(extra = {}) {
   if (state.filter.type === "favorite") opts.favorite = true;
   else if (state.filter.type !== "all") opts.type = state.filter.type;
   if (state.filter.tag) opts.tag = state.filter.tag;
+  if (state.filter.folderId !== undefined) opts.folderId = state.filter.folderId;
+  if (state.view === "gallery") opts.hasImage = true;
   return opts;
 }
 
@@ -70,19 +108,32 @@ async function loadItems({ reset }) {
     state.items = [];
     state.focusedIndex = -1;
     el.itemList.textContent = "";
+    el.galleryGrid.textContent = "";
   }
   const beforeCreatedAt = reset ? null : state.items.at(-1)?.createdAt ?? null;
   const batch = await queryItems(currentQueryOptions({ beforeCreatedAt }));
   state.items.push(...batch);
-  for (const item of batch) el.itemList.appendChild(buildCard(item));
+  for (const item of batch) {
+    if (state.view === "gallery") el.galleryGrid.appendChild(buildGalleryTile(item));
+    else el.itemList.appendChild(buildCard(item));
+  }
   el.loadMoreBtn.hidden = batch.length < PAGE_SIZE;
   updateEmptyState();
 }
 
 function updateEmptyState() {
   const isEmpty = state.items.length === 0;
-  el.emptyState.hidden = !isEmpty;
-  el.itemList.hidden = isEmpty;
+  if (state.view === "gallery") {
+    el.emptyState.hidden = true;
+    el.itemList.hidden = true;
+    el.galleryGrid.hidden = isEmpty;
+    el.galleryEmptyHint.hidden = !isEmpty;
+  } else {
+    el.galleryGrid.hidden = true;
+    el.galleryEmptyHint.hidden = true;
+    el.emptyState.hidden = !isEmpty;
+    el.itemList.hidden = isEmpty;
+  }
 }
 
 async function refreshTagFilterOptions() {
@@ -100,6 +151,57 @@ async function refreshTagFilterOptions() {
     el.tagFilter.appendChild(opt);
   }
   el.tagFilter.value = tags.includes(current) ? current : "";
+}
+
+async function refreshFolderFilterOptions() {
+  state.folders = await getAllFolders();
+  const current = el.folderFilter.value;
+  el.folderFilter.textContent = "";
+
+  const allOpt = document.createElement("option");
+  allOpt.value = "";
+  allOpt.textContent = "All folders";
+  el.folderFilter.appendChild(allOpt);
+
+  const unfiledOpt = document.createElement("option");
+  unfiledOpt.value = "unfiled";
+  unfiledOpt.textContent = "Unfiled";
+  el.folderFilter.appendChild(unfiledOpt);
+
+  for (const folder of state.folders) {
+    const opt = document.createElement("option");
+    opt.value = String(folder.id);
+    opt.textContent = folder.name;
+    el.folderFilter.appendChild(opt);
+  }
+
+  const validValues = new Set(["", "unfiled", ...state.folders.map((f) => String(f.id))]);
+  el.folderFilter.value = validValues.has(current) ? current : "";
+}
+
+function populateFolderSelect(selectEl, selectedValue) {
+  selectEl.textContent = "";
+  const noneOpt = document.createElement("option");
+  noneOpt.value = "";
+  noneOpt.textContent = "No folder";
+  selectEl.appendChild(noneOpt);
+  for (const folder of state.folders) {
+    const opt = document.createElement("option");
+    opt.value = String(folder.id);
+    opt.textContent = folder.name;
+    selectEl.appendChild(opt);
+  }
+  selectEl.value = selectedValue;
+}
+
+function setFolderFilter(folderId) {
+  el.folderFilter.value = folderId === null ? "unfiled" : String(folderId);
+  state.filter.folderId = folderId;
+  loadItems({ reset: true });
+}
+
+function getFolderName(folderId) {
+  return state.folders.find((f) => f.id === folderId)?.name || "Folder";
 }
 
 // --- Card rendering -----------------------------------------------------------------
@@ -127,6 +229,7 @@ function buildCard(item) {
   node.querySelector(".card-snippet").textContent = snippet;
   node.querySelector(".card-note").textContent = item.note || "";
   renderTags(node.querySelector(".card-tags"), item);
+  renderFolderChip(node.querySelector(".card-folder"), item);
 
   const favBtn = node.querySelector(".action-favorite");
   favBtn.classList.toggle("active", !!item.favorite);
@@ -171,20 +274,11 @@ function renderThumb(container, item) {
     container.title = "Click to expand";
     container.addEventListener("click", (e) => {
       e.stopPropagation();
-      openImageModal(item);
+      openDetailModal(item);
     });
   } else {
     container.appendChild(placeholderIcon(item));
   }
-}
-
-function openImageModal(item) {
-  if (!item.imageBlob) return;
-  if (modalObjectUrl) URL.revokeObjectURL(modalObjectUrl);
-  modalObjectUrl = URL.createObjectURL(item.imageBlob);
-  el.imageModalImg.src = modalObjectUrl;
-  el.imageModalImg.alt = item.title || "";
-  el.imageModal.showModal();
 }
 
 function renderFavicon(img, item) {
@@ -210,6 +304,20 @@ function renderTags(container, item) {
     });
     container.appendChild(chip);
   }
+}
+
+function renderFolderChip(btn, item) {
+  if (item.folderId == null) {
+    btn.hidden = true;
+    btn.onclick = null;
+    return;
+  }
+  btn.hidden = false;
+  btn.textContent = getFolderName(item.folderId);
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    setFolderFilter(item.folderId);
+  };
 }
 
 function placeholderIcon(item) {
@@ -245,6 +353,76 @@ function cardEl(id) {
   return el.itemList.querySelector(`.item-card[data-id="${id}"]`);
 }
 
+// --- Gallery rendering ---------------------------------------------------------------
+function buildGalleryTile(item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "gallery-tile";
+  btn.classList.toggle("favorited", !!item.favorite);
+  btn.dataset.id = String(item.id);
+  btn.title = item.title || item.domain || "Untitled";
+
+  const url = URL.createObjectURL(item.imageBlob);
+  trackObjectUrl(item.id, "thumb", url);
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "";
+  btn.appendChild(img);
+
+  const titleEl = document.createElement("span");
+  titleEl.className = "gallery-tile-title";
+  titleEl.textContent = item.title || item.domain || "Untitled";
+  btn.appendChild(titleEl);
+
+  btn.addEventListener("click", () => openDetailModal(item));
+  return btn;
+}
+
+// --- Detail modal (image + metadata) --------------------------------------------------
+function openDetailModal(item) {
+  if (!item.imageBlob) return;
+  if (modalObjectUrl) URL.revokeObjectURL(modalObjectUrl);
+  modalObjectUrl = URL.createObjectURL(item.imageBlob);
+  el.imageModalImg.src = modalObjectUrl;
+  el.imageModalImg.alt = item.title || "";
+
+  renderFavicon(el.imageModalFavicon, item);
+  el.imageModalDomain.textContent = item.domain || "";
+  el.imageModalTimestamp.textContent = formatTimestamp(item.createdAt);
+  el.imageModalTimestamp.dateTime = new Date(item.createdAt).toISOString();
+  el.imageModalTitle.textContent = item.title || item.domain || "Untitled";
+
+  const linkUrl = item.textFragmentUrl || item.url;
+  if (linkUrl) {
+    el.imageModalUrl.textContent = item.url || linkUrl;
+    el.imageModalUrl.href = linkUrl;
+  } else {
+    el.imageModalUrl.textContent = "";
+    el.imageModalUrl.removeAttribute("href");
+  }
+
+  el.imageModalNote.textContent = item.note || "";
+  renderTags(el.imageModalTags, item);
+
+  el.imageModalFavorite.classList.toggle("active", !!item.favorite);
+  el.imageModalFavorite.onclick = async () => {
+    await toggleFavorite(item.id);
+    el.imageModalFavorite.classList.toggle("active", !!item.favorite);
+  };
+  el.imageModalEdit.onclick = () => {
+    el.imageModal.close();
+    openEditor(item.id);
+  };
+  el.imageModalCopy.onclick = () => copyItem(item.id);
+  el.imageModalOpen.onclick = () => openItem(item.id);
+  el.imageModalDelete.onclick = () => {
+    el.imageModal.close();
+    deleteItemWithUndo(item.id);
+  };
+
+  el.imageModal.showModal();
+}
+
 // --- Object URL lifecycle -----------------------------------------------------------
 function trackObjectUrl(id, key, url) {
   let entry = state.objectUrls.get(id);
@@ -277,7 +455,7 @@ async function toggleFavorite(id) {
   item.favorite = updated.favorite;
 
   if (state.filter.type === "favorite" && !item.favorite) {
-    removeCardFromView(id);
+    removeItemFromView(id);
     return;
   }
   const card = cardEl(id);
@@ -285,14 +463,18 @@ async function toggleFavorite(id) {
     card.classList.toggle("favorited", item.favorite);
     card.querySelector(".action-favorite").classList.toggle("active", item.favorite);
   }
+  const tile = el.galleryGrid.querySelector(`.gallery-tile[data-id="${id}"]`);
+  if (tile) tile.classList.toggle("favorited", item.favorite);
 }
 
-function removeCardFromView(id) {
+function removeItemFromView(id) {
   const idx = state.items.findIndex((i) => i.id === id);
   if (idx !== -1) state.items.splice(idx, 1);
   if (state.focusedIndex >= state.items.length) state.focusedIndex = state.items.length - 1;
   const card = cardEl(id);
   if (card) card.remove();
+  const tile = el.galleryGrid.querySelector(`.gallery-tile[data-id="${id}"]`);
+  if (tile) tile.remove();
   revokeItemObjectUrls(id);
   updateEmptyState();
 }
@@ -300,7 +482,7 @@ function removeCardFromView(id) {
 function deleteItemWithUndo(id) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
-  removeCardFromView(id);
+  removeItemFromView(id);
 
   deleteItem(id).catch((err) => console.error("[snap-shelf] delete failed", err));
   refreshTagFilterOptions();
@@ -362,6 +544,7 @@ function openEditor(id) {
   el.editNote.value = item.note || "";
   el.editTagsInput.value = "";
   renderEditTags();
+  populateFolderSelect(el.editFolder, item.folderId != null ? String(item.folderId) : "");
   el.editDialog.showModal();
   el.editNote.focus();
 }
@@ -391,6 +574,104 @@ function updateCardInPlace(item) {
   if (!card) return;
   card.querySelector(".card-note").textContent = item.note || "";
   renderTags(card.querySelector(".card-tags"), item);
+  renderFolderChip(card.querySelector(".card-folder"), item);
+}
+
+// --- Folder management dialog --------------------------------------------------------
+async function refreshFolderManageList() {
+  state.folders = await getAllFolders();
+  el.folderManageList.textContent = "";
+  for (const folder of state.folders) {
+    el.folderManageList.appendChild(buildFolderRow(folder));
+  }
+}
+
+function buildFolderRow(folder) {
+  const row = document.createElement("div");
+  row.className = "folder-row";
+
+  const nameSpan = document.createElement("span");
+  nameSpan.className = "folder-row-name";
+  nameSpan.textContent = folder.name;
+  row.appendChild(nameSpan);
+
+  const renameBtn = document.createElement("button");
+  renameBtn.type = "button";
+  renameBtn.className = "icon-btn";
+  renameBtn.setAttribute("aria-label", `Rename ${folder.name}`);
+  renameBtn.title = "Rename";
+  const renameIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  renameIcon.setAttribute("viewBox", "0 0 24 24");
+  renameIcon.setAttribute("class", "icon icon-sm");
+  renameIcon.setAttribute("fill", "none");
+  renameIcon.setAttribute("stroke", "currentColor");
+  renameIcon.setAttribute("stroke-width", "2");
+  renameIcon.innerHTML = '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>';
+  renameBtn.appendChild(renameIcon);
+  renameBtn.addEventListener("click", () => startRenameFolder(row, folder));
+  row.appendChild(renameBtn);
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "icon-btn";
+  deleteBtn.setAttribute("aria-label", `Delete ${folder.name}`);
+  deleteBtn.title = "Delete";
+  const deleteIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  deleteIcon.setAttribute("viewBox", "0 0 24 24");
+  deleteIcon.setAttribute("class", "icon icon-sm");
+  deleteIcon.setAttribute("fill", "none");
+  deleteIcon.setAttribute("stroke", "currentColor");
+  deleteIcon.setAttribute("stroke-width", "2");
+  deleteIcon.innerHTML = '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>';
+  deleteBtn.appendChild(deleteIcon);
+  deleteBtn.addEventListener("click", async () => {
+    await deleteFolder(folder.id);
+    if (state.filter.folderId === folder.id) state.filter.folderId = undefined;
+    await refreshFolderManageList();
+    await refreshFolderFilterOptions();
+    await loadItems({ reset: true });
+    showToast("Folder deleted");
+  });
+  row.appendChild(deleteBtn);
+
+  return row;
+}
+
+function startRenameFolder(row, folder) {
+  row.textContent = "";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "folder-row-name-input";
+  input.value = folder.name;
+  input.maxLength = 60;
+  row.appendChild(input);
+  input.focus();
+  input.select();
+
+  let committed = false;
+  const commit = async () => {
+    if (committed) return;
+    committed = true;
+    const newName = input.value.trim();
+    if (newName && newName !== folder.name) {
+      await renameFolder(folder.id, newName);
+      await refreshFolderFilterOptions();
+      await loadItems({ reset: true });
+    }
+    await refreshFolderManageList();
+  };
+
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      committed = true;
+      refreshFolderManageList();
+    }
+  });
+  input.addEventListener("blur", commit);
 }
 
 // --- Toast -----------------------------------------------------------------------
@@ -470,6 +751,39 @@ function bindEvents() {
     loadItems({ reset: true });
   });
 
+  el.folderFilter.addEventListener("change", () => {
+    const v = el.folderFilter.value;
+    state.filter.folderId = v === "" ? undefined : v === "unfiled" ? null : Number(v);
+    loadItems({ reset: true });
+  });
+
+  el.viewButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.dataset.view === state.view) return;
+      el.viewButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      state.view = btn.dataset.view;
+      loadItems({ reset: true });
+    });
+  });
+
+  el.manageFoldersBtn.addEventListener("click", async () => {
+    await refreshFolderManageList();
+    el.folderDialog.showModal();
+  });
+
+  el.folderDialogClose.addEventListener("click", () => el.folderDialog.close());
+
+  el.folderCreateForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const name = el.folderNameInput.value.trim();
+    if (!name) return;
+    await addFolder(name);
+    el.folderNameInput.value = "";
+    await refreshFolderManageList();
+    await refreshFolderFilterOptions();
+  });
+
   el.loadMoreBtn.addEventListener("click", () => loadItems({ reset: false }));
 
   el.imageModalClose.addEventListener("click", () => el.imageModal.close());
@@ -501,7 +815,8 @@ function bindEvents() {
   el.editForm.addEventListener("submit", async () => {
     if (!editingItem) return;
     const note = el.editNote.value.trim();
-    const updated = await updateItem(editingItem.id, { note, tags: editingTags });
+    const folderId = el.editFolder.value === "" ? null : Number(el.editFolder.value);
+    const updated = await updateItem(editingItem.id, { note, tags: editingTags, folderId });
     const idx = state.items.findIndex((i) => i.id === updated.id);
     if (idx !== -1) state.items[idx] = updated;
     updateCardInPlace(updated);
@@ -535,6 +850,9 @@ function bindEvents() {
     }
 
     if (isTyping) return;
+    // Roving-tabindex shortcuts below operate on the list view's card index; gallery tiles
+    // use native tab focus + Enter/Space instead, so there's nothing to route to there.
+    if (state.view !== "list") return;
 
     switch (e.key) {
       case "ArrowDown":

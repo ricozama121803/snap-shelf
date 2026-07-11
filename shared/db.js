@@ -1,4 +1,4 @@
-import { DB_NAME, DB_VERSION, STORE_ITEMS } from "./constants.js";
+import { DB_NAME, DB_VERSION, STORE_ITEMS, STORE_FOLDERS } from "./constants.js";
 import { buildSearchBlob } from "./url-utils.js";
 
 let dbPromise = null;
@@ -20,6 +20,13 @@ export function openDB() {
         store.createIndex("by_tags", "tags", { multiEntry: true });
         store.createIndex("by_type", "type");
       }
+      if (!db.objectStoreNames.contains(STORE_FOLDERS)) {
+        const folderStore = db.createObjectStore(STORE_FOLDERS, {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        folderStore.createIndex("by_name", "name");
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -29,6 +36,10 @@ export function openDB() {
 
 function itemsStore(db, mode) {
   return db.transaction(STORE_ITEMS, mode).objectStore(STORE_ITEMS);
+}
+
+function foldersStore(db, mode) {
+  return db.transaction(STORE_FOLDERS, mode).objectStore(STORE_FOLDERS);
 }
 
 function reqToPromise(req) {
@@ -56,6 +67,7 @@ export async function addItem(item) {
     tags: item.tags || [],
     favorite: !!item.favorite,
     imageUnavailable: !!item.imageUnavailable,
+    folderId: item.folderId ?? null,
   };
   record.searchBlob = buildSearchBlob(record);
   const store = itemsStore(db, "readwrite");
@@ -104,6 +116,8 @@ export async function queryItems({
   tag = null,
   type = null,
   domain = null,
+  folderId = undefined, // undefined = no filter, null = unfiled only, number = a specific folder
+  hasImage = false,
   limit = 50,
   beforeCreatedAt = null,
 } = {}) {
@@ -128,6 +142,8 @@ export async function queryItems({
       if (matches && type && record.type !== type) matches = false;
       if (matches && domain && record.domain !== domain) matches = false;
       if (matches && tag && !(record.tags || []).includes(tag)) matches = false;
+      if (matches && folderId !== undefined && (record.folderId ?? null) !== folderId) matches = false;
+      if (matches && hasImage && !record.imageBlob) matches = false;
       if (matches && searchLower && !record.searchBlob.includes(searchLower)) matches = false;
       if (matches) results.push(record);
       cursor.continue();
@@ -159,4 +175,56 @@ export async function getAllTags() {
   });
 
   return Array.from(tags).sort();
+}
+
+// --- Folders --------------------------------------------------------------------
+export async function addFolder(name) {
+  const db = await openDB();
+  const store = foldersStore(db, "readwrite");
+  const record = { name: name.trim(), createdAt: Date.now() };
+  const id = await reqToPromise(store.add(record));
+  return { ...record, id };
+}
+
+export async function getAllFolders() {
+  const db = await openDB();
+  const store = foldersStore(db, "readonly");
+  const folders = await reqToPromise(store.getAll());
+  return folders.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function renameFolder(id, name) {
+  const db = await openDB();
+  const store = foldersStore(db, "readwrite");
+  const existing = await reqToPromise(store.get(id));
+  if (!existing) throw new Error(`Folder ${id} not found`);
+  const updated = { ...existing, name: name.trim() };
+  await reqToPromise(store.put(updated));
+  return updated;
+}
+
+// Deletes a folder and un-assigns it from any items that referenced it, in one transaction.
+export async function deleteFolder(id) {
+  const db = await openDB();
+  const tx = db.transaction([STORE_ITEMS, STORE_FOLDERS], "readwrite");
+  const items = tx.objectStore(STORE_ITEMS);
+  const folders = tx.objectStore(STORE_FOLDERS);
+
+  await new Promise((resolve, reject) => {
+    const cursorReq = items.openCursor();
+    cursorReq.onsuccess = () => {
+      const cursor = cursorReq.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      if (cursor.value.folderId === id) {
+        cursor.update({ ...cursor.value, folderId: null });
+      }
+      cursor.continue();
+    };
+    cursorReq.onerror = () => reject(cursorReq.error);
+  });
+
+  await reqToPromise(folders.delete(id));
 }

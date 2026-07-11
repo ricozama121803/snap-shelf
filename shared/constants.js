@@ -1,6 +1,7 @@
 export const DB_NAME = "SnapShelfDB";
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 export const STORE_ITEMS = "items";
+export const STORE_FOLDERS = "folders";
 
 export const ITEM_TYPE = {
   TEXT: "text",
