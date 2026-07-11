@@ -1,0 +1,41 @@
+#snapshelf-overlay-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  cursor: crosshair;
+  background: rgba(15, 15, 20, 0.15);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#snapshelf-selection-box {
+  position: fixed;
+  border: 1.5px solid #6366f1;
+  background: rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 0 4000px rgba(15, 15, 20, 0.35);
+  display: none;
+  pointer-events: none;
+}
+
+#snapshelf-hint {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #18181b;
+  color: #f4f4f5;
+  font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#snapshelf-hint kbd {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: inherit;
+  font-size: 11px;
+}

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Snap Shelf",
+  "version": "1.0.0",
+  "description": "Save highlighted text, cropped screenshots, and images from any page instead of bookmarking whole tabs.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Snap Shelf",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "scripting",
+    "sidePanel",
+    "offscreen"
+  ],
+  "host_permissions": [],
+  "commands": {
+    "start-region-capture": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Capture a screenshot region for Snap Shelf"
+    }
+  },
+  "minimum_chrome_version": "116"
+}
