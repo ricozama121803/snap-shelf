@@ -13,7 +13,7 @@ import { MESSAGE_TYPE, ITEM_TYPE } from "../shared/constants.js";
 
 const PAGE_SIZE = 40;
 const TOAST_UNDO_MS = 5000;
-const TOAST_INFO_MS = 1500;
+const TOAST_INFO_MS = 5000;
 
 const FALLBACK_FAVICON =
   "data:image/svg+xml," +
@@ -69,6 +69,9 @@ const el = {
   imageModalCopy: document.getElementById("image-modal-copy"),
   imageModalOpen: document.getElementById("image-modal-open"),
   imageModalDelete: document.getElementById("image-modal-delete"),
+  helpBtn: document.getElementById("help-btn"),
+  helpDialog: document.getElementById("help-dialog"),
+  helpDialogClose: document.getElementById("help-dialog-close"),
   folderDialog: document.getElementById("folder-dialog"),
   folderManageList: document.getElementById("folder-manage-list"),
   folderCreateForm: document.getElementById("folder-create-form"),
@@ -549,6 +552,14 @@ function openEditor(id) {
   el.editNote.focus();
 }
 
+function commitPendingTag() {
+  const value = el.editTagsInput.value.trim();
+  if (value && !editingTags.includes(value)) {
+    editingTags.push(value);
+  }
+  el.editTagsInput.value = "";
+}
+
 function renderEditTags() {
   el.editTagsList.textContent = "";
   for (const tag of editingTags) {
@@ -772,6 +783,9 @@ function bindEvents() {
     el.folderDialog.showModal();
   });
 
+  el.helpBtn.addEventListener("click", () => el.helpDialog.showModal());
+  el.helpDialogClose.addEventListener("click", () => el.helpDialog.close());
+
   el.folderDialogClose.addEventListener("click", () => el.folderDialog.close());
 
   el.folderCreateForm.addEventListener("submit", async (e) => {
@@ -801,12 +815,8 @@ function bindEvents() {
   el.editTagsInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const value = el.editTagsInput.value.trim();
-      if (value && !editingTags.includes(value)) {
-        editingTags.push(value);
-        renderEditTags();
-      }
-      el.editTagsInput.value = "";
+      commitPendingTag();
+      renderEditTags();
     }
   });
 
@@ -814,6 +824,9 @@ function bindEvents() {
 
   el.editForm.addEventListener("submit", async () => {
     if (!editingItem) return;
+    // Commit whatever's still sitting in the tag input (typed but not confirmed with Enter)
+    // so clicking Save doesn't silently drop it.
+    commitPendingTag();
     const note = el.editNote.value.trim();
     const folderId = el.editFolder.value === "" ? null : Number(el.editFolder.value);
     const updated = await updateItem(editingItem.id, { note, tags: editingTags, folderId });

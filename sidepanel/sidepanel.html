@@ -41,6 +41,9 @@
             <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           </button>
         </div>
+        <button id="help-btn" type="button" class="icon-btn" aria-label="Help" title="How to use Snap Shelf">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
       </div>
     </header>
 
@@ -95,6 +98,34 @@
           <button id="image-modal-delete" class="action-btn" type="button" aria-label="Delete" title="Delete (Del)">
             <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
           </button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="help-dialog">
+      <div class="dialog-inner">
+        <h2>How to use Snap Shelf</h2>
+        <h3>Save things</h3>
+        <ul class="help-list">
+          <li>Highlight text, then right-click &rarr; <strong>Save selection to Snap Shelf</strong></li>
+          <li>Right-click an image &rarr; <strong>Save image to Snap Shelf</strong></li>
+          <li>Right-click empty space &rarr; <strong>Capture screenshot region</strong>, or press <kbd>Ctrl+Shift+S</kbd> (<kbd>Cmd+Shift+S</kbd> on Mac), then drag to select</li>
+        </ul>
+        <h3>Organize</h3>
+        <ul class="help-list">
+          <li>Use the filter chips, tag filter, and search to find items</li>
+          <li>Folder icon: create, rename, or delete folders</li>
+          <li>Grid icon: gallery view of screenshots and images</li>
+        </ul>
+        <h3>Keyboard shortcuts</h3>
+        <ul class="help-list">
+          <li><kbd>/</kbd> search &middot; <kbd>&uarr;</kbd><kbd>&darr;</kbd> move between items</li>
+          <li><kbd>Enter</kbd> open original page &middot; <kbd>F</kbd> favorite</li>
+          <li><kbd>C</kbd> copy &middot; <kbd>E</kbd> edit &middot; <kbd>Del</kbd> delete</li>
+          <li><kbd>Esc</kbd> clear search or close a dialog</li>
+        </ul>
+        <div class="dialog-actions">
+          <button id="help-dialog-close" type="button" class="btn-secondary">Got it</button>
         </div>
       </div>
     </dialog>

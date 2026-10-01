@@ -32,6 +32,13 @@
   box-sizing: border-box;
 }
 
+/* Several elements below also set an unconditional `display` value for their visible state,
+   which would otherwise outrank the UA stylesheet's `[hidden] { display: none }` rule and keep
+   them showing even while the `hidden` attribute is set. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -900,4 +907,42 @@ dialog::backdrop {
 .btn-secondary {
   background: var(--bg-elevated);
   color: var(--text);
+}
+
+/* --- Help dialog --- */
+#help-dialog {
+  width: min(340px, 92vw);
+}
+
+#help-dialog h3 {
+  margin: 8px 0 2px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+}
+
+.help-list strong {
+  font-weight: 600;
+}
+
+.help-list kbd {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin: 0 1px;
+  font-family: inherit;
+  font-size: 10.5px;
+  color: var(--text-muted);
 }

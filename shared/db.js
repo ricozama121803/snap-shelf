@@ -28,7 +28,20 @@ export function openDB() {
         folderStore.createIndex("by_name", "name");
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    // If another open tab/panel is still holding a connection to an older DB version, the
+    // upgrade transaction above stalls indefinitely with no error unless we react here.
+    req.onblocked = () => {
+      console.warn(
+        "[snap-shelf] IndexedDB upgrade blocked by another open Snap Shelf tab/panel - close it and retry."
+      );
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      // Let this connection get out of the way of a *future* version bump instead of
+      // silently blocking it the same way, if this page is left open across an update.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbPromise;
