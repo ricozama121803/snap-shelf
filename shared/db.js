@@ -114,6 +114,51 @@ export async function restoreItem(item) {
   return item;
 }
 
+// Bulk helpers for the "Delete items" dialog. `type` null = every type.
+function matchesPurge(item, { type, keepFavorites }) {
+  if (type && item.type !== type) return false;
+  if (keepFavorites && item.favorite) return false;
+  return true;
+}
+
+function scanItems(db, mode, visit) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_ITEMS, mode);
+    const req = tx.objectStore(STORE_ITEMS).openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (cursor) {
+        visit(cursor);
+        cursor.continue();
+      }
+    };
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error);
+  });
+}
+
+export async function countPurgeable(opts = {}) {
+  const db = await openDB();
+  let count = 0;
+  await scanItems(db, "readonly", (cursor) => {
+    if (matchesPurge(cursor.value, opts)) count++;
+  });
+  return count;
+}
+
+export async function purgeItems(opts = {}) {
+  const db = await openDB();
+  let count = 0;
+  await scanItems(db, "readwrite", (cursor) => {
+    if (matchesPurge(cursor.value, opts)) {
+      cursor.delete();
+      count++;
+    }
+  });
+  return count;
+}
+
 export async function getItem(id) {
   const db = await openDB();
   const store = itemsStore(db, "readonly");

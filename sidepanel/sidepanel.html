@@ -8,31 +8,11 @@
   </head>
   <body>
     <header id="app-header">
-      <div id="search-row">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="search-input" type="search" placeholder="Search your Snap Shelf... (press /)" aria-label="Search saved items" />
-      </div>
-      <div id="filter-row" role="toolbar" aria-label="Filters">
-        <button class="chip active" data-filter-type="all" type="button">All</button>
-        <button class="chip" data-filter-type="favorite" type="button">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          Favorites
-        </button>
-        <button class="chip" data-filter-type="text" type="button">Text</button>
-        <button class="chip" data-filter-type="screenshot" type="button">Screenshots</button>
-        <button class="chip" data-filter-type="image" type="button">Images</button>
-        <select id="tag-filter" aria-label="Filter by tag">
-          <option value="">All tags</option>
-        </select>
-      </div>
-      <div id="secondary-row" role="toolbar" aria-label="Folder and view controls">
-        <select id="folder-filter" aria-label="Filter by folder">
-          <option value="">All folders</option>
-          <option value="unfiled">Unfiled</option>
-        </select>
-        <button id="manage-folders-btn" type="button" class="icon-btn" aria-label="Manage folders" title="Manage folders">
-          <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        </button>
+      <div id="top-row">
+        <div id="search-row">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="search-input" type="search" placeholder="Search (press /)" aria-label="Search saved items" />
+        </div>
         <div id="view-toggle" role="group" aria-label="View mode">
           <button class="view-btn active" data-view="list" type="button" aria-label="List view" title="List view">
             <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
@@ -45,6 +25,34 @@
           <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </button>
       </div>
+      <div id="filter-row" role="toolbar" aria-label="Filters">
+        <button class="chip active" data-filter-type="all" type="button">All</button>
+        <button class="chip" data-filter-type="favorite" type="button">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          Favorites
+        </button>
+        <button class="chip" data-filter-type="text" type="button">Text</button>
+        <button class="chip" data-filter-type="screenshot" type="button">Screenshots</button>
+        <button class="chip" data-filter-type="image" type="button">Images</button>
+      </div>
+      <details id="more-filters">
+        <summary>Tags, folders &amp; cleanup</summary>
+        <div id="secondary-row">
+          <select id="tag-filter" aria-label="Filter by tag">
+            <option value="">All tags</option>
+          </select>
+          <select id="folder-filter" aria-label="Filter by folder">
+            <option value="">All folders</option>
+            <option value="unfiled">Unfiled</option>
+          </select>
+          <button id="manage-folders-btn" type="button" class="icon-btn" aria-label="Manage folders" title="Manage folders">
+          <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        </button>
+          <button id="purge-btn" type="button" class="icon-btn" aria-label="Delete items in bulk" title="Delete items in bulk">
+            <svg class="icon icon-sm" viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+          </button>
+        </div>
+      </details>
     </header>
 
     <main id="app-main" tabindex="-1">
@@ -126,6 +134,25 @@
         </ul>
         <div class="dialog-actions">
           <button id="help-dialog-close" type="button" class="btn-secondary">Got it</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog id="purge-dialog">
+      <div class="dialog-inner">
+        <h2>Delete items</h2>
+        <label for="purge-type">What to delete</label>
+        <select id="purge-type">
+          <option value="">Everything</option>
+          <option value="text">All text</option>
+          <option value="screenshot">All screenshots</option>
+          <option value="image">All images</option>
+        </select>
+        <label class="check-row"><input id="purge-keep-favorites" type="checkbox" checked /> Keep favorites</label>
+        <p id="purge-summary"></p>
+        <div class="dialog-actions">
+          <button id="purge-cancel" type="button" class="btn-secondary">Cancel</button>
+          <button id="purge-confirm" type="button" class="btn-danger">Delete</button>
         </div>
       </div>
     </dialog>

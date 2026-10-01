@@ -8,6 +8,8 @@ import {
   getAllFolders,
   renameFolder,
   deleteFolder,
+  countPurgeable,
+  purgeItems,
 } from "../shared/db.js";
 import { MESSAGE_TYPE, ITEM_TYPE } from "../shared/constants.js";
 
@@ -34,6 +36,7 @@ const state = {
 const el = {
   searchInput: document.getElementById("search-input"),
   filterRow: document.getElementById("filter-row"),
+  moreFilters: document.getElementById("more-filters"),
   tagFilter: document.getElementById("tag-filter"),
   folderFilter: document.getElementById("folder-filter"),
   manageFoldersBtn: document.getElementById("manage-folders-btn"),
@@ -69,6 +72,13 @@ const el = {
   imageModalCopy: document.getElementById("image-modal-copy"),
   imageModalOpen: document.getElementById("image-modal-open"),
   imageModalDelete: document.getElementById("image-modal-delete"),
+  purgeBtn: document.getElementById("purge-btn"),
+  purgeDialog: document.getElementById("purge-dialog"),
+  purgeType: document.getElementById("purge-type"),
+  purgeKeepFavorites: document.getElementById("purge-keep-favorites"),
+  purgeSummary: document.getElementById("purge-summary"),
+  purgeCancel: document.getElementById("purge-cancel"),
+  purgeConfirm: document.getElementById("purge-confirm"),
   helpBtn: document.getElementById("help-btn"),
   helpDialog: document.getElementById("help-dialog"),
   helpDialogClose: document.getElementById("help-dialog-close"),
@@ -199,6 +209,7 @@ function populateFolderSelect(selectEl, selectedValue) {
 
 function setFolderFilter(folderId) {
   el.folderFilter.value = folderId === null ? "unfiled" : String(folderId);
+  el.moreFilters.open = true;
   state.filter.folderId = folderId;
   loadItems({ reset: true });
 }
@@ -246,7 +257,7 @@ function buildCard(item) {
   });
   node.querySelector(".action-copy").addEventListener("click", (e) => {
     e.stopPropagation();
-    copyItem(item.id);
+    copyItem(item.id, e.currentTarget);
   });
   node.querySelector(".action-open").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -416,7 +427,7 @@ function openDetailModal(item) {
     el.imageModal.close();
     openEditor(item.id);
   };
-  el.imageModalCopy.onclick = () => copyItem(item.id);
+  el.imageModalCopy.onclick = (e) => copyItem(item.id, e.currentTarget);
   el.imageModalOpen.onclick = () => openItem(item.id);
   el.imageModalDelete.onclick = () => {
     el.imageModal.close();
@@ -497,7 +508,21 @@ function deleteItemWithUndo(id) {
   });
 }
 
-async function copyItem(id) {
+const BUTTON_FLASH_MS = 1500;
+
+// Briefly swaps a button's icon for a text label, then restores it.
+function flashButton(btn, label) {
+  if (!btn || btn.classList.contains("flashing")) return;
+  const original = Array.from(btn.childNodes);
+  btn.classList.add("flashing");
+  btn.replaceChildren(document.createTextNode(label));
+  setTimeout(() => {
+    btn.replaceChildren(...original);
+    btn.classList.remove("flashing");
+  }, BUTTON_FLASH_MS);
+}
+
+async function copyItem(id, btn) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
   try {
@@ -509,7 +534,8 @@ async function copyItem(id) {
     } else {
       await navigator.clipboard.writeText(item.url || "");
     }
-    showToast("Copied to clipboard");
+    if (btn) flashButton(btn, "Copied");
+    else showToast("Copied to clipboard");
   } catch (err) {
     console.error("[snap-shelf] copy failed", err);
     showToast("Copy failed");
@@ -534,6 +560,7 @@ function openItem(id) {
 
 function setTagFilter(tag) {
   el.tagFilter.value = tag;
+  el.moreFilters.open = true;
   state.filter.tag = tag;
   loadItems({ reset: true });
 }
@@ -781,6 +808,37 @@ function bindEvents() {
   el.manageFoldersBtn.addEventListener("click", async () => {
     await refreshFolderManageList();
     el.folderDialog.showModal();
+  });
+
+  const purgeOptions = () => ({
+    type: el.purgeType.value || null,
+    keepFavorites: el.purgeKeepFavorites.checked,
+  });
+
+  async function refreshPurgeSummary() {
+    const count = await countPurgeable(purgeOptions());
+    el.purgeSummary.textContent =
+      count === 0
+        ? "Nothing matches."
+        : `${count} item${count === 1 ? "" : "s"} will be permanently deleted. This can't be undone.`;
+    el.purgeConfirm.disabled = count === 0;
+    el.purgeConfirm.textContent = count === 0 ? "Delete" : `Delete ${count}`;
+  }
+
+  el.purgeBtn.addEventListener("click", async () => {
+    await refreshPurgeSummary();
+    el.purgeDialog.showModal();
+  });
+  el.purgeType.addEventListener("change", refreshPurgeSummary);
+  el.purgeKeepFavorites.addEventListener("change", refreshPurgeSummary);
+  el.purgeCancel.addEventListener("click", () => el.purgeDialog.close());
+  el.purgeConfirm.addEventListener("click", async () => {
+    el.purgeConfirm.disabled = true;
+    const deleted = await purgeItems(purgeOptions());
+    el.purgeDialog.close();
+    await refreshTagFilterOptions();
+    await loadItems({ reset: true });
+    showToast(`Deleted ${deleted} item${deleted === 1 ? "" : "s"}`);
   });
 
   el.helpBtn.addEventListener("click", () => el.helpDialog.showModal());
